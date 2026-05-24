@@ -1,0 +1,982 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>TaskFlow</title>
+  <meta name="theme-color" content="#4f46e5">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" async></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:          #f0f2f5;
+      --surface:     #ffffff;
+      --surface2:    #f1f3f5;
+      --border:      #e2e5ea;
+      --text:        #1a1d23;
+      --text2:       #5c6470;
+      --text3:       #9ca3af;
+      --accent:      #4f46e5;
+      --accent-d:    #4338ca;
+      --accent-bg:   #eef2ff;
+
+      --personal:    #2563eb;
+      --personal-bg: #eff6ff;
+      --dayjob:      #059669;
+      --dayjob-bg:   #ecfdf5;
+      --music:       #7c3aed;
+      --music-bg:    #f5f3ff;
+
+      --high:        #dc2626;
+      --high-bg:     #fef2f2;
+      --medium:      #d97706;
+      --medium-bg:   #fffbeb;
+      --low:         #6b7280;
+      --low-bg:      #f9fafb;
+
+      --done:        #059669;
+      --inprog:      #2563eb;
+      --nostart:     #9ca3af;
+
+      --r:  12px;
+      --rs: 8px;
+      --sh: 0 1px 3px rgba(0,0,0,.07), 0 1px 2px rgba(0,0,0,.04);
+      --shm:0 4px 12px rgba(0,0,0,.10);
+      --tr: .15s ease;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg:         #0d1117;
+        --surface:    #161b22;
+        --surface2:   #21262d;
+        --border:     #30363d;
+        --text:       #e6edf3;
+        --text2:      #8b949e;
+        --text3:      #484f58;
+        --accent-bg:  #1a1f6e22;
+        --personal-bg:#0d2340;
+        --dayjob-bg:  #052e1c;
+        --music-bg:   #1e0b42;
+        --high-bg:    #3b0a0a;
+        --medium-bg:  #3b1f04;
+        --low-bg:     #161b22;
+      }
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100dvh;
+    }
+
+    /* ── Layout ───────────────────────────────────── */
+    .app { max-width: 860px; margin: 0 auto; min-height: 100dvh; display: flex; flex-direction: column; }
+
+    /* ── Header ───────────────────────────────────── */
+    .hdr {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; z-index: 100;
+    }
+    .hdr-top {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 16px; height: 56px; gap: 10px;
+    }
+    .logo { font-size: 1.2rem; font-weight: 800; color: var(--accent); letter-spacing: -.03em; }
+    .logo span { opacity: .5; font-weight: 400; }
+    .hdr-btns { display: flex; gap: 8px; align-items: center; }
+
+    /* ── Chips / filter bar ───────────────────────── */
+    .chips {
+      display: flex; gap: 6px; padding: 8px 16px 10px;
+      overflow-x: auto; scrollbar-width: none;
+    }
+    .chips::-webkit-scrollbar { display: none; }
+    .chip {
+      flex-shrink: 0;
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 5px 12px; border-radius: 100px;
+      border: 1.5px solid var(--border);
+      font-size: .78rem; font-weight: 500;
+      cursor: pointer; background: var(--surface); color: var(--text2);
+      transition: var(--tr); -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+    .chip:hover { border-color: var(--accent); color: var(--accent); }
+    .chip.on { background: var(--accent-bg); border-color: var(--accent); color: var(--accent); }
+    .cdot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+
+    /* ── Stats ────────────────────────────────────── */
+    .stats {
+      display: flex; gap: 10px; padding: 12px 16px 4px;
+      overflow-x: auto; scrollbar-width: none;
+    }
+    .stats::-webkit-scrollbar { display: none; }
+    .stat {
+      flex-shrink: 0;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--rs); padding: 10px 16px; text-align: center;
+    }
+    .stat-v { font-size: 1.4rem; font-weight: 700; line-height: 1; }
+    .stat-l { font-size: .68rem; color: var(--text2); margin-top: 3px; text-transform: uppercase; letter-spacing: .04em; }
+
+    /* ── Main / task list ─────────────────────────── */
+    main { flex: 1; padding: 12px 16px 100px; }
+
+    .task-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-left: 3.5px solid transparent;
+      border-radius: var(--r);
+      padding: 14px 16px;
+      margin-bottom: 10px;
+      box-shadow: var(--sh);
+      transition: var(--tr);
+    }
+    .task-card:hover { box-shadow: var(--shm); }
+    .task-card.p-high   { border-left-color: var(--high); }
+    .task-card.p-medium { border-left-color: var(--medium); }
+    .task-card.p-low    { border-left-color: var(--low); }
+    .task-card.s-completed { opacity: .62; }
+    .task-card.s-completed .tname { text-decoration: line-through; }
+
+    .trow { display: flex; gap: 12px; align-items: flex-start; }
+
+    .status-btn {
+      margin-top: 3px; flex-shrink: 0;
+      width: 22px; height: 22px; border-radius: 50%;
+      border: 2px solid var(--border);
+      background: transparent; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: var(--tr); -webkit-tap-highlight-color: transparent;
+    }
+    .status-btn.not-started { border-color: var(--nostart); }
+    .status-btn.in-progress { border-color: var(--inprog); background: var(--inprog); }
+    .status-btn.in-progress::after { content:''; width:7px; height:7px; border-radius:50%; background:white; }
+    .status-btn.completed   { border-color: var(--done); background: var(--done); }
+    .status-btn.completed::after { content:'✓'; font-size:12px; color:white; font-weight:700; line-height:1; }
+
+    .tcontent { flex: 1; min-width: 0; }
+    .tname { font-size: .9375rem; font-weight: 500; color: var(--text); line-height: 1.4; margin-bottom: 6px; word-break: break-word; }
+
+    .tmeta { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; margin-bottom: 4px; }
+
+    .badge {
+      display: inline-flex; align-items: center; gap: 3px;
+      padding: 2px 9px; border-radius: 100px;
+      font-size: .72rem; font-weight: 600; white-space: nowrap;
+    }
+    .bp-personal { background: var(--personal-bg); color: var(--personal); }
+    .bp-dayjob   { background: var(--dayjob-bg);   color: var(--dayjob);   }
+    .bp-music    { background: var(--music-bg);     color: var(--music);    }
+    .bpr-high    { background: var(--high-bg);   color: var(--high);   }
+    .bpr-medium  { background: var(--medium-bg); color: var(--medium); }
+    .bpr-low     { background: var(--low-bg);    color: var(--low);    }
+    .bst         { background: var(--surface2);  color: var(--text2);  }
+    .bdue        { background: var(--surface2);  color: var(--text2);  }
+    .bdue.overdue  { background: var(--high-bg); color: var(--high); }
+    .bdue.due-soon { background: var(--medium-bg); color: var(--medium); }
+
+    .tnotes {
+      font-size: .8125rem; color: var(--text2); line-height: 1.5;
+      margin-top: 6px; word-break: break-word;
+      white-space: pre-wrap;
+    }
+
+    /* Comments */
+    .tcomments { margin-top: 10px; border-top: 1px solid var(--border); padding-top: 10px; }
+    .comment-item {
+      background: var(--surface2); border-radius: var(--rs);
+      padding: 8px 10px; margin-bottom: 6px; font-size: .8rem;
+      color: var(--text); line-height: 1.5; word-break: break-word;
+    }
+    .comment-meta { font-size: .7rem; color: var(--text3); margin-top: 3px; display: flex; justify-content: space-between; }
+    .add-comment-row { display: flex; gap: 6px; margin-top: 6px; }
+    .add-comment-inp {
+      flex: 1; padding: 7px 10px; font-size: .8125rem;
+      border: 1.5px solid var(--border); border-radius: var(--rs);
+      background: var(--surface); color: var(--text);
+    }
+    .add-comment-inp:focus { outline: none; border-color: var(--accent); }
+
+    /* Task action buttons */
+    .tactions { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+    .tact {
+      font-size: .75rem; padding: 4px 10px;
+      border-radius: 6px; border: 1px solid var(--border);
+      background: transparent; color: var(--text2);
+      cursor: pointer; transition: var(--tr); -webkit-tap-highlight-color: transparent;
+    }
+    .tact:hover { background: var(--surface2); }
+    .tact.danger:hover { background: var(--high-bg); color: var(--high); border-color: var(--high); }
+    .tact.expand { color: var(--accent); border-color: var(--accent-bg); background: var(--accent-bg); }
+
+    /* Empty state */
+    .empty { text-align: center; padding: 56px 24px; color: var(--text2); }
+    .empty-ico { font-size: 3rem; margin-bottom: 12px; }
+    .empty h3 { font-size: 1rem; font-weight: 600; margin-bottom: 4px; color: var(--text); }
+    .empty p  { font-size: .875rem; }
+
+    /* ── Buttons ──────────────────────────────────── */
+    .btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 8px 16px; border-radius: var(--rs);
+      border: none; font-size: .875rem; font-weight: 500;
+      cursor: pointer; transition: var(--tr);
+      white-space: nowrap; -webkit-tap-highlight-color: transparent;
+    }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover { background: var(--accent-d); }
+    .btn-ghost { background: transparent; color: var(--text2); border: 1px solid var(--border); }
+    .btn-ghost:hover { background: var(--surface2); }
+    .btn-icon {
+      padding: 8px; border-radius: var(--rs);
+      background: var(--surface2); border: none;
+      color: var(--text2); cursor: pointer;
+      display: inline-flex; align-items: center; justify-content: center;
+      transition: var(--tr); -webkit-tap-highlight-color: transparent;
+    }
+    .btn-icon:hover { background: var(--border); }
+
+    /* ── FAB ──────────────────────────────────────── */
+    .fab {
+      position: fixed; bottom: 24px; right: 24px;
+      width: 56px; height: 56px; border-radius: 50%;
+      background: var(--accent); color: #fff;
+      border: none; font-size: 1.75rem;
+      cursor: pointer; box-shadow: 0 4px 14px rgba(79,70,229,.45);
+      display: flex; align-items: center; justify-content: center;
+      transition: var(--tr); z-index: 90;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .fab:hover { transform: scale(1.06); }
+    .fab:active { transform: scale(.94); }
+
+    /* ── Modal ────────────────────────────────────── */
+    .overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,.5);
+      backdrop-filter: blur(4px);
+      z-index: 200;
+      display: flex; align-items: flex-end;
+    }
+    @media (min-width: 640px) {
+      .overlay { align-items: center; justify-content: center; padding: 24px; }
+    }
+    .modal {
+      background: var(--surface);
+      border-radius: var(--r) var(--r) 0 0;
+      width: 100%; max-height: 92dvh;
+      overflow-y: auto; padding: 20px;
+    }
+    @media (min-width: 640px) {
+      .modal { border-radius: var(--r); max-width: 500px; max-height: 85vh; }
+    }
+    .modal-hdr { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
+    .modal-title { font-size: 1.1rem; font-weight: 700; }
+
+    /* ── Form elements ────────────────────────────── */
+    .fg { margin-bottom: 14px; }
+    .flabel { display: block; font-size: .8rem; font-weight: 600; color: var(--text2); margin-bottom: 5px; text-transform: uppercase; letter-spacing: .03em; }
+    .finput, .fselect, .ftextarea {
+      width: 100%; padding: 10px 12px;
+      border: 1.5px solid var(--border); border-radius: var(--rs);
+      background: var(--surface); color: var(--text);
+      font-size: .9375rem; font-family: inherit;
+      transition: var(--tr); -webkit-appearance: none;
+    }
+    .finput:focus, .fselect:focus, .ftextarea:focus {
+      outline: none; border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(79,70,229,.12);
+    }
+    .ftextarea { resize: vertical; min-height: 72px; }
+    .fselect {
+      cursor: pointer;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236c757d' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 12px center;
+      padding-right: 32px;
+    }
+
+    /* Segment control */
+    .seg { display: flex; border: 1.5px solid var(--border); border-radius: var(--rs); overflow: hidden; }
+    .sego {
+      flex: 1; padding: 9px 4px; text-align: center;
+      font-size: .8rem; font-weight: 500;
+      cursor: pointer; border: none; background: transparent;
+      color: var(--text2); transition: var(--tr);
+      border-left: 1.5px solid var(--border);
+      -webkit-tap-highlight-color: transparent;
+    }
+    .sego:first-child { border-left: none; }
+    .sego.on { background: var(--accent); color: #fff; }
+
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    @media (max-width: 400px) { .form-row { grid-template-columns: 1fr; } }
+
+    .form-actions { display: flex; gap: 8px; margin-top: 18px; }
+    .form-actions .btn { flex: 1; justify-content: center; }
+
+    /* ── Toast ────────────────────────────────────── */
+    .toast {
+      position: fixed; bottom: 90px; left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: #1a1d23; color: #fff;
+      padding: 9px 20px; border-radius: 100px;
+      font-size: .85rem; font-weight: 500; z-index: 999;
+      opacity: 0; transition: opacity .2s, transform .2s;
+      pointer-events: none; white-space: nowrap;
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+    /* ── Sync info banner ─────────────────────────── */
+    .sync-banner {
+      background: linear-gradient(135deg, #4f46e5, #7c3aed);
+      color: #fff; padding: 10px 16px; font-size: .82rem;
+      display: flex; align-items: center; gap: 10px;
+      flex-wrap: wrap; line-height: 1.4;
+    }
+    .sync-banner a { color: rgba(255,255,255,.85); text-decoration: underline; cursor: pointer; font-weight: 500; }
+
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ── Header ─────────────────────────────────── -->
+  <header class="hdr">
+    <div class="hdr-top">
+      <div class="logo">Task<span>Flow</span></div>
+      <div class="hdr-btns">
+        <button class="btn-icon" onclick="openSync()" title="Sync between devices">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M23 4v6h-6"/><path d="M1 20v-6h6"/>
+            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+          </svg>
+        </button>
+        <button class="btn btn-primary" onclick="openAdd()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Add Task
+        </button>
+      </div>
+    </div>
+    <div class="chips" id="chips">
+      <button class="chip on"  data-f="all"         onclick="setFilter('all',this)">All</button>
+      <button class="chip"     data-f="not-started"  onclick="setFilter('not-started',this)"><span class="cdot" style="background:var(--nostart)"></span>Not Started</button>
+      <button class="chip"     data-f="in-progress"  onclick="setFilter('in-progress',this)"><span class="cdot" style="background:var(--inprog)"></span>In Progress</button>
+      <button class="chip"     data-f="completed"    onclick="setFilter('completed',this)"><span class="cdot" style="background:var(--done)"></span>Completed</button>
+      <button class="chip"     data-f="high"         onclick="setFilter('high',this)"><span class="cdot" style="background:var(--high)"></span>High Priority</button>
+      <button class="chip"     data-f="overdue"      onclick="setFilter('overdue',this)"><span class="cdot" style="background:var(--high)"></span>Overdue</button>
+      <button class="chip"     data-f="personal"     onclick="setFilter('personal',this)"><span class="cdot" style="background:var(--personal)"></span>Personal</button>
+      <button class="chip"     data-f="dayjob"       onclick="setFilter('dayjob',this)"><span class="cdot" style="background:var(--dayjob)"></span>Day Job</button>
+      <button class="chip"     data-f="music"        onclick="setFilter('music',this)"><span class="cdot" style="background:var(--music)"></span>Music Business</button>
+    </div>
+  </header>
+
+  <!-- ── Stats bar ──────────────────────────────── -->
+  <div class="stats" id="stats"></div>
+
+  <!-- ── Task list ──────────────────────────────── -->
+  <main id="board"></main>
+
+</div>
+
+<!-- FAB -->
+<button class="fab" onclick="openAdd()" aria-label="Add task">+</button>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<!-- ══════════════════════════════════════════════
+     TASK MODAL
+══════════════════════════════════════════════ -->
+<div class="overlay hidden" id="taskOverlay" onclick="overlayClick(event,'taskOverlay')">
+<div class="modal" role="dialog" aria-labelledby="mTitle">
+  <div class="modal-hdr">
+    <span class="modal-title" id="mTitle">Add Task</span>
+    <button class="btn-icon" onclick="closeModal()">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
+
+  <div class="fg">
+    <label class="flabel" for="fName">Task Name *</label>
+    <input class="finput" id="fName" type="text" placeholder="What needs to be done?" maxlength="250" />
+  </div>
+
+  <div class="fg">
+    <label class="flabel" for="fProject">Project *</label>
+    <select class="fselect" id="fProject">
+      <option value="personal">Personal</option>
+      <option value="dayjob">Day Job</option>
+      <option value="music">Music Business</option>
+    </select>
+  </div>
+
+  <div class="form-row">
+    <div class="fg">
+      <label class="flabel">Priority</label>
+      <div class="seg" id="segPriority">
+        <button class="sego" data-v="high"   onclick="seg('priority','high',this)">🔴 High</button>
+        <button class="sego on" data-v="medium" onclick="seg('priority','medium',this)">🟡 Med</button>
+        <button class="sego" data-v="low"    onclick="seg('priority','low',this)">⚪ Low</button>
+      </div>
+    </div>
+    <div class="fg">
+      <label class="flabel">Status</label>
+      <div class="seg" id="segStatus">
+        <button class="sego on" data-v="not-started" onclick="seg('status','not-started',this)">Not Started</button>
+        <button class="sego" data-v="in-progress"    onclick="seg('status','in-progress',this)">In Progress</button>
+        <button class="sego" data-v="completed"      onclick="seg('status','completed',this)">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="fg">
+    <label class="flabel" for="fDue">Due Date</label>
+    <input class="finput" id="fDue" type="date" />
+  </div>
+
+  <div class="fg">
+    <label class="flabel" for="fNotes">Notes</label>
+    <textarea class="ftextarea" id="fNotes" placeholder="Any details or context…"></textarea>
+  </div>
+
+  <div class="form-actions">
+    <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+    <button class="btn btn-primary" onclick="saveTask()">Save Task</button>
+  </div>
+</div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     SYNC MODAL
+══════════════════════════════════════════════ -->
+<div class="overlay hidden" id="syncOverlay" onclick="overlayClick(event,'syncOverlay')">
+<div class="modal" role="dialog">
+  <div class="modal-hdr">
+    <span class="modal-title">Sync Between Devices</span>
+    <button class="btn-icon" onclick="closeSync()">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
+
+  <!-- Tabs -->
+  <div style="display:flex;border:1.5px solid var(--border);border-radius:var(--rs);overflow:hidden;margin-bottom:18px;">
+    <button id="tabQR"   class="sego on"  style="flex:1;padding:10px;" onclick="switchSyncTab('qr')">📱 QR Code</button>
+    <button id="tabCode" class="sego"     style="flex:1;padding:10px;border-left:1.5px solid var(--border);" onclick="switchSyncTab('code')">🔑 Text Code</button>
+    <button id="tabImport" class="sego"  style="flex:1;padding:10px;border-left:1.5px solid var(--border);" onclick="switchSyncTab('import')">📥 Import</button>
+  </div>
+
+  <!-- QR tab -->
+  <div id="tabPanelQR">
+    <p style="font-size:.84rem;color:var(--text2);margin-bottom:14px;line-height:1.55;">
+      <strong style="color:var(--text)">Easiest method:</strong> Show this QR code on your Windows screen, then scan it with your Android phone's camera. The phone will open TaskFlow and automatically import all your tasks.
+    </p>
+    <div id="qrCanvas" style="display:flex;justify-content:center;margin-bottom:14px;"></div>
+    <p id="qrNote" style="font-size:.75rem;color:var(--text3);text-align:center;line-height:1.4;"></p>
+  </div>
+
+  <!-- Text Code tab -->
+  <div id="tabPanelCode" class="hidden">
+    <p style="font-size:.84rem;color:var(--text2);margin-bottom:14px;line-height:1.55;">
+      Copy this code and paste it into the <strong>Import</strong> tab on your other device.
+    </p>
+    <div class="fg">
+      <label class="flabel">Sync Code</label>
+      <textarea class="ftextarea" id="syncOut" readonly style="font-family:monospace;font-size:.7rem;min-height:90px;"></textarea>
+    </div>
+    <button class="btn btn-primary" style="width:100%;justify-content:center;" onclick="copySync()">Copy Code to Clipboard</button>
+  </div>
+
+  <!-- Import tab -->
+  <div id="tabPanelImport" class="hidden">
+    <p style="font-size:.84rem;color:var(--text2);margin-bottom:14px;line-height:1.55;">
+      Paste a sync code from your other device. Newer task data always wins on conflict — nothing gets lost.
+    </p>
+    <div class="fg">
+      <label class="flabel">Paste Code Here</label>
+      <textarea class="ftextarea" id="syncIn" placeholder="Paste sync code here…" style="font-family:monospace;font-size:.72rem;"></textarea>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-ghost" onclick="closeSync()">Cancel</button>
+      <button class="btn btn-primary" onclick="doImport()">Import Tasks</button>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     SCRIPT
+══════════════════════════════════════════════ -->
+<script>
+// ── State ─────────────────────────────────────────
+let tasks = [];
+let filter = 'all';
+let editId = null;
+let formState = { priority: 'medium', status: 'not-started' };
+let expandedComments = new Set(); // task IDs with comments visible
+
+// ── Persistence ────────────────────────────────────
+const KEY = 'taskflow_v2';
+function save() { localStorage.setItem(KEY, JSON.stringify(tasks)); }
+function load() {
+  try { tasks = JSON.parse(localStorage.getItem(KEY) || '[]'); } catch { tasks = []; }
+}
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+
+// ── Projects / Priority / Status labels ───────────
+const PROJ  = { personal: 'Personal', dayjob: 'Day Job', music: 'Music Business' };
+const PRIOR = { high: '🔴 High', medium: '🟡 Medium', low: '⚪ Low' };
+const STAT  = { 'not-started': 'Not Started', 'in-progress': 'In Progress', completed: 'Completed' };
+
+// ── Due-date helpers ───────────────────────────────
+function dueClass(dateStr) {
+  if (!dateStr) return '';
+  const today = new Date(); today.setHours(0,0,0,0);
+  const d = new Date(dateStr + 'T00:00:00');
+  const diff = Math.round((d - today) / 86400000);
+  if (diff < 0) return 'overdue';
+  if (diff <= 3) return 'due-soon';
+  return '';
+}
+function fmtDate(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr + 'T00:00:00');
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+function todayISO() { return new Date().toISOString().slice(0, 10); }
+
+// ── Filtering ──────────────────────────────────────
+function setFilter(f, el) {
+  filter = f;
+  document.querySelectorAll('.chip').forEach(c => c.classList.remove('on'));
+  el.classList.add('on');
+  render();
+}
+
+function filtered() {
+  return tasks.filter(t => {
+    if (filter === 'all')         return true;
+    if (filter === 'not-started') return t.status === 'not-started';
+    if (filter === 'in-progress') return t.status === 'in-progress';
+    if (filter === 'completed')   return t.status === 'completed';
+    if (filter === 'high')        return t.priority === 'high';
+    if (filter === 'overdue')     return t.due && dueClass(t.due) === 'overdue' && t.status !== 'completed';
+    if (filter === 'personal')    return t.project === 'personal';
+    if (filter === 'dayjob')      return t.project === 'dayjob';
+    if (filter === 'music')       return t.project === 'music';
+    return true;
+  });
+}
+
+// ── Render ─────────────────────────────────────────
+function render() { renderStats(); renderBoard(); }
+
+function renderStats() {
+  const active = tasks.filter(t => t.status !== 'completed');
+  const ns = tasks.filter(t => t.status === 'not-started').length;
+  const ip = tasks.filter(t => t.status === 'in-progress').length;
+  const done = tasks.filter(t => t.status === 'completed').length;
+  const hi = tasks.filter(t => t.priority === 'high' && t.status !== 'completed').length;
+  const ov = tasks.filter(t => t.due && dueClass(t.due) === 'overdue' && t.status !== 'completed').length;
+
+  document.getElementById('stats').innerHTML = [
+    { v: tasks.length, l: 'Total', c: '' },
+    { v: ip,   l: 'In Progress', c: 'var(--inprog)' },
+    { v: ns,   l: 'Not Started', c: '' },
+    { v: done, l: 'Completed',   c: 'var(--done)' },
+    { v: hi,   l: 'High Priority', c: 'var(--high)' },
+    ov ? { v: ov, l: 'Overdue', c: 'var(--high)' } : null,
+  ].filter(Boolean).map(s => `
+    <div class="stat">
+      <div class="stat-v" style="${s.c ? 'color:'+s.c : ''}">${s.v}</div>
+      <div class="stat-l">${s.l}</div>
+    </div>`).join('');
+}
+
+function renderBoard() {
+  const list = filtered();
+  const board = document.getElementById('board');
+
+  if (!list.length) {
+    board.innerHTML = `<div class="empty">
+      <div class="empty-ico">📋</div>
+      <h3>${tasks.length ? 'No tasks match this filter' : 'No tasks yet'}</h3>
+      <p>${tasks.length ? 'Try a different filter above' : 'Tap "+ Add Task" to get started'}</p>
+    </div>`;
+    return;
+  }
+
+  // Sort: non-completed first by priority then status; completed last
+  const pOrd = { high: 0, medium: 1, low: 2 };
+  const sOrd = { 'in-progress': 0, 'not-started': 1, completed: 2 };
+  const sorted = [...list].sort((a, b) => {
+    if (a.status === 'completed' !== (b.status === 'completed'))
+      return a.status === 'completed' ? 1 : -1;
+    if (pOrd[a.priority] !== pOrd[b.priority]) return pOrd[a.priority] - pOrd[b.priority];
+    return sOrd[a.status] - sOrd[b.status];
+  });
+
+  board.innerHTML = sorted.map(t => taskCard(t)).join('');
+}
+
+function taskCard(t) {
+  const dc = t.due ? dueClass(t.due) : '';
+  const dueBadge = t.due
+    ? `<span class="badge bdue ${dc}">📅 ${fmtDate(t.due)}${dc === 'overdue' ? ' — OVERDUE' : dc === 'due-soon' ? ' — Soon' : ''}</span>`
+    : '';
+  const noteHtml = t.notes
+    ? `<div class="tnotes">${esc(t.notes)}</div>` : '';
+
+  const comments = t.comments || [];
+  const showComments = expandedComments.has(t.id);
+  const commentCount = comments.length;
+
+  const commentSection = showComments ? `
+    <div class="tcomments">
+      ${comments.map((c, i) => `
+        <div class="comment-item">
+          ${esc(c.text)}
+          <div class="comment-meta">
+            <span>${fmtDatetime(c.at)}</span>
+            <button style="border:none;background:none;cursor:pointer;color:var(--text3);font-size:.7rem;" onclick="deleteComment('${t.id}',${i})">✕</button>
+          </div>
+        </div>`).join('')}
+      <div class="add-comment-row">
+        <input class="add-comment-inp" id="ci-${t.id}" type="text" placeholder="Add a comment…" maxlength="500"
+          onkeydown="if(event.key==='Enter')addComment('${t.id}')" />
+        <button class="btn btn-primary" style="padding:7px 12px;font-size:.8rem;" onclick="addComment('${t.id}')">Post</button>
+      </div>
+    </div>` : '';
+
+  return `<div class="task-card p-${t.priority} s-${t.status}" id="tc-${t.id}">
+    <div class="trow">
+      <button class="status-btn ${t.status}" onclick="cycleStatus('${t.id}')" title="Click to change status"></button>
+      <div class="tcontent">
+        <div class="tname">${esc(t.name)}</div>
+        <div class="tmeta">
+          <span class="badge bp-${t.project}">${PROJ[t.project]}</span>
+          <span class="badge bpr-${t.priority}">${PRIOR[t.priority]}</span>
+          <span class="badge bst">${STAT[t.status]}</span>
+          ${dueBadge}
+        </div>
+        ${noteHtml}
+        <div class="tactions">
+          <button class="tact" onclick="editTask('${t.id}')">✏️ Edit</button>
+          <button class="tact expand" onclick="toggleComments('${t.id}')">
+            💬 ${commentCount > 0 ? commentCount + ' Comment' + (commentCount > 1 ? 's' : '') : 'Comments'}
+            ${showComments ? '▲' : '▼'}
+          </button>
+          <button class="tact danger" onclick="delTask('${t.id}')">🗑 Delete</button>
+        </div>
+        ${commentSection}
+      </div>
+    </div>
+  </div>`;
+}
+
+function fmtDatetime(ts) {
+  if (!ts) return '';
+  return new Date(ts).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
+function esc(s) {
+  const d = document.createElement('div');
+  d.appendChild(document.createTextNode(s || ''));
+  return d.innerHTML;
+}
+
+// ── Status cycle ───────────────────────────────────
+function cycleStatus(id) {
+  const t = tasks.find(x => x.id === id); if (!t) return;
+  const c = { 'not-started': 'in-progress', 'in-progress': 'completed', completed: 'not-started' };
+  t.status = c[t.status];
+  t.updatedAt = Date.now();
+  save(); render();
+  toast(`Status → ${STAT[t.status]}`);
+}
+
+// ── Comments ───────────────────────────────────────
+function toggleComments(id) {
+  if (expandedComments.has(id)) expandedComments.delete(id);
+  else expandedComments.add(id);
+  render();
+  // Auto-focus the comment input if opening
+  if (expandedComments.has(id)) {
+    setTimeout(() => { const el = document.getElementById('ci-' + id); if (el) el.focus(); }, 50);
+  }
+}
+
+function addComment(id) {
+  const inp = document.getElementById('ci-' + id);
+  const text = inp ? inp.value.trim() : '';
+  if (!text) return;
+  const t = tasks.find(x => x.id === id); if (!t) return;
+  if (!t.comments) t.comments = [];
+  t.comments.push({ text, at: Date.now() });
+  t.updatedAt = Date.now();
+  save(); render();
+  expandedComments.add(id);
+  setTimeout(() => { const el = document.getElementById('ci-' + id); if (el) el.focus(); }, 50);
+}
+
+function deleteComment(id, idx) {
+  const t = tasks.find(x => x.id === id); if (!t || !t.comments) return;
+  t.comments.splice(idx, 1);
+  t.updatedAt = Date.now();
+  save(); render();
+  expandedComments.add(id);
+}
+
+// ── Delete task ────────────────────────────────────
+function delTask(id) {
+  if (!confirm('Delete this task?')) return;
+  tasks = tasks.filter(x => x.id !== id);
+  expandedComments.delete(id);
+  save(); render();
+  toast('Task deleted');
+}
+
+// ── Segment controls ───────────────────────────────
+function seg(field, val, btn) {
+  formState[field] = val;
+  btn.closest('.seg').querySelectorAll('.sego').forEach(b => b.classList.remove('on'));
+  btn.classList.add('on');
+}
+function setSegField(segId, val) {
+  document.querySelectorAll(`#${segId} .sego`).forEach(b => {
+    b.classList.toggle('on', b.dataset.v === val);
+  });
+  const field = segId === 'segPriority' ? 'priority' : 'status';
+  formState[field] = val;
+}
+
+// ── Modal open/close ───────────────────────────────
+function openAdd() {
+  editId = null;
+  document.getElementById('mTitle').textContent = 'Add Task';
+  document.getElementById('fName').value = '';
+  document.getElementById('fProject').value = 'personal';
+  document.getElementById('fDue').value = '';
+  document.getElementById('fNotes').value = '';
+  formState = { priority: 'medium', status: 'not-started' };
+  setSegField('segPriority', 'medium');
+  setSegField('segStatus', 'not-started');
+  document.getElementById('taskOverlay').classList.remove('hidden');
+  setTimeout(() => document.getElementById('fName').focus(), 80);
+}
+
+function editTask(id) {
+  const t = tasks.find(x => x.id === id); if (!t) return;
+  editId = id;
+  document.getElementById('mTitle').textContent = 'Edit Task';
+  document.getElementById('fName').value = t.name;
+  document.getElementById('fProject').value = t.project;
+  document.getElementById('fDue').value = t.due || '';
+  document.getElementById('fNotes').value = t.notes || '';
+  formState = { priority: t.priority, status: t.status };
+  setSegField('segPriority', t.priority);
+  setSegField('segStatus', t.status);
+  document.getElementById('taskOverlay').classList.remove('hidden');
+  setTimeout(() => document.getElementById('fName').focus(), 80);
+}
+
+function closeModal() {
+  document.getElementById('taskOverlay').classList.add('hidden');
+  editId = null;
+}
+
+// ── Save task ──────────────────────────────────────
+function saveTask() {
+  const name = document.getElementById('fName').value.trim();
+  if (!name) {
+    const el = document.getElementById('fName');
+    el.style.borderColor = 'var(--high)';
+    el.focus();
+    setTimeout(() => el.style.borderColor = '', 1500);
+    return;
+  }
+  const data = {
+    name,
+    project: document.getElementById('fProject').value,
+    priority: formState.priority,
+    status: formState.status,
+    due: document.getElementById('fDue').value || null,
+    notes: document.getElementById('fNotes').value.trim(),
+    updatedAt: Date.now(),
+  };
+  if (editId) {
+    const idx = tasks.findIndex(x => x.id === editId);
+    tasks[idx] = { ...tasks[idx], ...data };
+    toast('Task updated ✓');
+  } else {
+    tasks.unshift({ id: uid(), createdAt: Date.now(), comments: [], ...data });
+    toast('Task added! ✓');
+  }
+  save(); closeModal(); render();
+}
+
+// ── Sync tabs ──────────────────────────────────────
+let syncTab = 'qr';
+function switchSyncTab(tab) {
+  syncTab = tab;
+  ['qr','code','import'].forEach(t => {
+    document.getElementById('tabPanel' + t.charAt(0).toUpperCase() + t.slice(1))
+      .classList.toggle('hidden', t !== tab);
+    document.getElementById('tab' + t.charAt(0).toUpperCase() + t.slice(1))
+      .classList.toggle('on', t === tab);
+  });
+  if (tab === 'qr') buildQR();
+}
+
+function buildQR() {
+  const canvas = document.getElementById('qrCanvas');
+  canvas.innerHTML = '';
+  const code = btoa(unescape(encodeURIComponent(JSON.stringify(tasks))));
+  const base = window.location.href.split('?')[0].split('#')[0];
+  const isFile = base.startsWith('file:');
+  const noteEl = document.getElementById('qrNote');
+
+  if (isFile) {
+    noteEl.textContent = '⚠️ QR sync works best when the app is hosted at a real URL (see hosting instructions). Use the Text Code tab instead for now.';
+    canvas.innerHTML = '<p style="color:var(--text2);font-size:.82rem;text-align:center;padding:16px;">Host the app online to enable QR sync.</p>';
+    return;
+  }
+
+  const url = base + '?import=' + encodeURIComponent(code);
+  noteEl.textContent = url.length > 2953
+    ? '⚠️ You have a lot of tasks — the QR code may be hard to scan. Use the Text Code tab if scanning fails.'
+    : 'Show this QR on your Windows screen, then point your Android camera at it.';
+
+  if (typeof QRCode === 'undefined') {
+    canvas.innerHTML = '<p style="color:var(--text2);font-size:.82rem;text-align:center;padding:16px;">QR library not loaded — use the Text Code tab instead.</p>';
+    return;
+  }
+  try {
+    new QRCode(canvas, {
+      text: url,
+      width: 220, height: 220,
+      colorDark: '#000', colorLight: '#fff',
+      correctLevel: QRCode.CorrectLevel.M
+    });
+  } catch(e) {
+    canvas.innerHTML = '<p style="color:var(--text2);font-size:.82rem;text-align:center;">QR generation failed — use the Text Code tab instead.</p>';
+  }
+}
+
+// ── Sync open/close ────────────────────────────────
+function openSync() {
+  syncTab = 'qr';
+  const code = btoa(unescape(encodeURIComponent(JSON.stringify(tasks))));
+  document.getElementById('syncOut').value = code;
+  document.getElementById('syncIn').value = '';
+  // Reset tabs
+  ['qr','code','import'].forEach(t => {
+    document.getElementById('tabPanel' + t.charAt(0).toUpperCase() + t.slice(1))
+      .classList.toggle('hidden', t !== 'qr');
+    document.getElementById('tab' + t.charAt(0).toUpperCase() + t.slice(1))
+      .classList.toggle('on', t === 'qr');
+  });
+  document.getElementById('syncOverlay').classList.remove('hidden');
+  buildQR();
+}
+function closeSync() { document.getElementById('syncOverlay').classList.add('hidden'); }
+
+function copySync() {
+  const code = document.getElementById('syncOut').value;
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(code).then(() => toast('Code copied! ✓')).catch(() => fallbackCopy(code));
+  } else { fallbackCopy(code); }
+}
+function fallbackCopy(text) {
+  const el = document.getElementById('syncOut');
+  el.select(); document.execCommand('copy');
+  toast('Code copied! ✓');
+}
+
+function doImport() {
+  const raw = document.getElementById('syncIn').value.trim();
+  if (!raw) { toast('Paste a sync code first'); return; }
+  try {
+    const imported = JSON.parse(decodeURIComponent(escape(atob(raw))));
+    if (!Array.isArray(imported)) throw new Error();
+    // Merge: newer updatedAt wins; new IDs are added
+    const map = new Map(tasks.map(t => [t.id, t]));
+    imported.forEach(t => {
+      const ex = map.get(t.id);
+      if (!ex || (t.updatedAt || 0) > (ex.updatedAt || 0)) map.set(t.id, t);
+    });
+    tasks = [...map.values()];
+    save(); closeSync(); render();
+    toast(`Merged ${imported.length} tasks ✓`);
+  } catch { toast('Invalid sync code — please try again'); }
+}
+
+// ── Overlay click-outside-to-close ────────────────
+function overlayClick(e, id) {
+  if (e.target.id === id) {
+    if (id === 'taskOverlay') closeModal();
+    else closeSync();
+  }
+}
+
+// ── Toast ──────────────────────────────────────────
+let toastT;
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.classList.add('show');
+  clearTimeout(toastT);
+  toastT = setTimeout(() => el.classList.remove('show'), 2600);
+}
+
+// ── Keyboard shortcuts ─────────────────────────────
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { closeModal(); closeSync(); }
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+    if (!document.getElementById('taskOverlay').classList.contains('hidden')) saveTask();
+  }
+});
+
+// ── URL-based auto-import (QR code destination) ────
+function checkURLImport() {
+  const params = new URLSearchParams(window.location.search);
+  const importData = params.get('import');
+  if (!importData) return;
+
+  // Clean the URL immediately so refreshing doesn't re-import
+  history.replaceState({}, '', window.location.pathname);
+
+  try {
+    const imported = JSON.parse(decodeURIComponent(escape(atob(importData))));
+    if (!Array.isArray(imported)) throw new Error();
+
+    const before = tasks.length;
+    const map = new Map(tasks.map(t => [t.id, t]));
+    imported.forEach(t => {
+      const ex = map.get(t.id);
+      if (!ex || (t.updatedAt || 0) > (ex.updatedAt || 0)) map.set(t.id, t);
+    });
+    tasks = [...map.values()];
+    save();
+
+    const added = tasks.length - before;
+    toast(`✓ Synced ${imported.length} tasks from QR code`);
+  } catch(e) {
+    toast('Could not read QR sync data');
+  }
+}
+
+// ── Boot ───────────────────────────────────────────
+load();
+checkURLImport();
+render();
+</script>
+</body>
+</html>
